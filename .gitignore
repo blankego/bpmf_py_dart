@@ -1,0 +1,11 @@
+# https://dart.dev/guides/libraries/private-files
+# Created by `dart pub`
+.dart_tool/
+play_around.*
+play_ground.*
+bin/bpmf_py.dart
+foo.*
+~*.*
+*副本.xlsx
+foo/
+logs/
