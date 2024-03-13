@@ -1,6 +1,9 @@
-import './src/bpmf_codes.dart';
+import 'src/py_maps.dart';
+import 'src/spell_tree.dart';
+import 'src/bpmf_codes.dart';
 
 class BpSyllable {
+  //#region fields and ctor
   //The following three fields are all charcode of corresponding bopomofo symbols
   final int init;
   final int med;
@@ -12,6 +15,17 @@ class BpSyllable {
   final int tone;
 
   const BpSyllable(this.init, this.med, this.rime, this.tone);
+
+  //#endregion
+
+  //#region structural props
+
+  ///四呼：0開，1齊，2合，3撮
+  int get sihu => switch (med) { $i => 1, $u => 2, $yu => 3, _ => 0 };
+
+  //#endregion
+
+  //#region props
 
   @override
   String toString() => bopomofo;
@@ -26,23 +40,28 @@ class BpSyllable {
     return buf.toString();
   }
 
-  //#region structural props
+  String get asciiPinyin {
+    final buf = StringBuffer(pyInit)
+      ..write(medRimeToAscii[(_pySihu, _pyRime)]!)
+      ..write(const ['', '1', '2', '3', '4', '5'][tone]);
+    return buf.toString();
+  }
 
-  // ///四呼：0開，1齊，2合，3撮
-  // int get sihu => switch (med) { $i => 1, $u => 2, $yu => 3, _ => 0 };
-
-  // //拼音拼寫中形式上的四呼 如 juan 實為撮口，形式上是合口
-  // int get pySihu => switch (init) {
-  //       0 => switch (med) {
-  //           $u when rime != 0 => 0,
-  //           $i when rime != 0 => 0,
-  //           $yu => 2,
-  //           _ => sihu,
-  //         },
-  //       $j || $q || $x => med == $yu ? 2 : 1,
-  //       _ => sihu,
-  //     };
   String get pyInit => initialPyMap[init == 0 ? med : init] ?? '';
+
+  int get _pySihu => switch (init) {
+        0 => switch (med) {
+            $i => switch (rime) { 0 || $en || $eng => $i, _ => 0 },
+            $u => rime == 0 ? $u : 0,
+            $yu => $u,
+            _ => med,
+          },
+        $j || $q || $x when med == $yu => rime == $eng ? $yu : $u,
+        _ => med,
+      };
+
+  ///eliminate yeh!
+  int get _pyRime => init == 0 && med == $i && rime == $eh ? $e : rime;
 
   ///Y，W视作声母; 可标调元音字母视作韻腹; 标调字母后面的部分视作韻尾,一切以拼写形式为准而非声韵结构 ，如：
   ///yu视作 y+0+u+0、xun, 視為 x+0+u+n，juan視為 j+u+a+n ，gui 视作 g+u+i+0
@@ -114,41 +133,6 @@ class BpSyllable {
     return (m, nuc, coda);
   }
 
-  static const pyRimeNucCodaMap = {
-    $a: ($A, ''),
-    $o: ($O, ''),
-    $e: ($E, ''),
-    $eh: ($E, ''),
-    $ai: ($A, 'i'),
-    $ei: ($E, 'i'),
-    $ao: ($A, 'o'),
-    $ou: ($O, 'u'),
-    $an: ($A, 'n'),
-    $en: ($E, 'n'),
-    $ang: ($A, 'ng'),
-    $eng: ($E, 'ng'),
-    $er: ($E, 'r'),
-    $i: ($I, ''),
-    $u: ($U, ''),
-    $yu: ($YU, ''),
-    0: ($I, ''), //(r)i
-  };
-
-  static const pyUntonedToTonedNucMap = {
-    $A: 'āáǎàa',
-    $E: 'ēéěèe',
-    $I: 'īíǐìi',
-    $O: 'ōóǒòo',
-    $U: 'ūúǔùu',
-    $YU: 'ǖǘǚǜü',
-  };
-
-  static final Map<int, int> pyTonedToUntonedNucMap = (() => {
-        for (final MapEntry(:key, :value) in pyUntonedToTonedNucMap.entries)
-          for (final ch in value.codeUnits) ch: key
-      })();
-
-  //#endregion
   String get bopomofo {
     final buf = StringBuffer();
     if (tone == 5) buf.writeCharCode(toneMarks[4]);
@@ -160,9 +144,13 @@ class BpSyllable {
     return buf.toString();
   }
 
+  //#endregion
+
   static int skipSpaces(String str, int pos) {
     for (;; pos++) {
-      if (str.codeUnitAt(pos) case $space || $fullspace || $tab) continue;
+      if (str.codeUnitAt(pos) case $space || $fullspace || $tab || $apos) {
+        continue;
+      }
       return pos;
     }
   }
@@ -220,68 +208,100 @@ class BpSyllable {
     return (BpSyllable(i, m, r, t), pos);
   }
 
-//   static (BpSyllable, int) parsePinyin(String pinyin, {int pos = 0}) {
-//     var letter = pinyin.codeUnitAt(pos = skipSpaces(pinyin, pos));
-//     final len = pinyin.length;
-//     var rimeDone = false;
-//     var (i, m, r, t) = (0, 0, 0, 0);
+  static (BpSyllable, int) parseAsciiPinyin(String pinyin, {int pos = 0}) {
+    var (i, p1) = parsePinyinInitial(pinyin, pos: pos);
+    //W,Y
+    bool isW = i == $u;
+    bool isY = i == $i;
+    if (isW || isY) i = 0;
 
-//     //聲母
-//     if (pyFirstLetterMap[letter] case var match?) {
-//       letter = pinyin.codeUnitAt(++pos);
+    if (ascPyRimeTree.findMatch(pinyin, p1) case ((var m, var r), var p2)?) {
+      var t = 0;
+      if (p2 < pinyin.length) {
+        if (pinyin.codeUnitAt(p2)
+            case > 48 && < 54 && var toneCode /* '1' < x < '5'*/) {
+          t = toneCode - 48;
+          p2++;
+        }
+      }
 
-//       if (match case $i || $u) {
-//         //y,w
-//         m = match;
-//       } else if (match case $z || $c || $s when letter == $H) {
-//         //zh ch sh?
-//         letter = pinyin.codeUnitAt(++pos);
-//         i = switch (match) { $z => $zh, $c => $ch, _ => $sh };
-//       } else {
-//         i = match;
-//       }
-//     }
+      //dealing with pinyin quirks
 
-//     var foundMed = true;
-//     //介音
-//     switch (letter) {
-//       case $I:
-//         m = $i;
-//       case $U:
-//         if (m == $i || i == $j || i == $q || i == $x) {
-//           //yu ju qu xu
-//           m = $yu;
-//         } else {
-//           m = $u;
-//         }
+      if (isW) {
+        //wu,w_ -> u, u_
+        m = $u;
+      } else if (isY) {
+        //yan -> ian, yuan -> üan
+        m = m == $u || m == $yu ? $yu : $i;
+        //ye -> ye(h)
+        if (m == $i && r == $e) r = $eh;
+      } else if (i case $j || $q || $x when m == $u) {
+        //juan -> jüan
+        m = $yu;
+      } else if (i case >= $zh && <= $s when m == $i && r == 0) {
+        //zh+i -> zhi
+        m = 0;
+      }
 
-//       case $YU:
-//         m = $yu;
-//       default:
-//         foundMed = false;
-//     }
+      return (BpSyllable(i, m, r, t), p2);
+    }
+    throw ArgumentError('"$pinyin" is not valid pinyin');
+  }
 
-//     if (foundMed && ++pos < len) {
-//       letter = pinyin.codeUnitAt(pos);
-//     }
-//     // 韻
-//     // if (pos < len) {
-//     //   switch (letter) {
-//     //     case $A:
-//     //     case $E:
-//     //     case $I when m == $u:
-//     //       r = $ei;
-//     //     case $I
-//     //     case $O:
-//     //     case $U when m == $i:
-//     //       r = $ou;
-//     //   }
-//     // }
-//     return (MnSyl(i, m, r, t), pos);
-//   }
+  static (int, int) parsePinyinInitial(String py, {int pos = 0}) {
+    pos = skipSpaces(py, pos);
+    var firstLetter = py.codeUnitAt(pos);
+    if (firstLetter < $A || firstLetter > $Z) {
+      throw ArgumentError(
+          'The letter ${py[pos]} at $pos of "$py" is invalid pinyin initial');
+    }
+    var i = pyFirstLetterMap[firstLetter];
+    if (i == null) return (0, pos);
+    pos++;
+    if (i case $z || $c || $s when py.codeUnitAt(pos) == $H) {
+      pos++;
+      i = switch (i) { $z => $zh, $c => $ch, _ => $sh };
+    }
+    return (i, pos);
+  }
 }
 
 //#region maps
+
+const pyRimeNucCodaMap = {
+  $a: ($A, ''),
+  $o: ($O, ''),
+  $e: ($E, ''),
+  $eh: ($E, ''),
+  $ai: ($A, 'i'),
+  $ei: ($E, 'i'),
+  $ao: ($A, 'o'),
+  $ou: ($O, 'u'),
+  $an: ($A, 'n'),
+  $en: ($E, 'n'),
+  $ang: ($A, 'ng'),
+  $eng: ($E, 'ng'),
+  $er: ($E, 'r'),
+  $i: ($I, ''),
+  $u: ($U, ''),
+  $yu: ($YU, ''),
+  0: ($I, ''), //(r)i
+};
+
+const pyUntonedToTonedNucMap = {
+  $A: 'āáǎàa',
+  $E: 'ēéěèe',
+  $I: 'īíǐìi',
+  $O: 'ōóǒòo',
+  $U: 'ūúǔùu',
+  $YU: 'ǖǘǚǜü',
+};
+
+final Map<int, int> pyTonedToUntonedNucMap = (() => {
+      for (final MapEntry(:key, :value) in pyUntonedToTonedNucMap.entries)
+        for (final ch in value.codeUnits) ch: key
+    })();
+
 const pyFirstLetterMap = {
   $B: $b,
   $P: $p,
@@ -376,4 +396,5 @@ const initialPyMap = {
 // final Map<String, String> toBpmfLetterMap = {
 //   for (final MapEntry(:key, :value) in fromBpmfLetterMap.entries) value: key
 // };
+
 //#endregion

@@ -69,4 +69,4 @@ const int $b = 12549,
     $5 = 729;
 
 const toneMarks = [$1, $2, $3, $4, $5];
-const $space = 32, $fullspace = 12288, $tab = 9;
+const $space = 32, $fullspace = 12288, $tab = 9, $apos = 39;

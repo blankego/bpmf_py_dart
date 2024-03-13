@@ -1,3 +1,5 @@
+import 'py_maps.dart';
+
 class SpellTreeNode<T> {
   T? match;
   final Map<int, SpellTreeNode<T>> children = {};
@@ -6,14 +8,27 @@ class SpellTreeNode<T> {
 
   SpellTreeNode([this.match]);
 
-  T? findMatch(String text, int idx) {
-    if (idx >= text.length) return null;
+  (T, int)? findMatch(String txt, int idx) {
+    if (idx >= txt.length) return null;
 
-    if (children[text.codeUnitAt(idx)] case final matchedNode?) {
-      return matchedNode.isLeaf
-          ? matchedNode.match
-          : matchedNode.findMatch(text, idx + 1) ?? matchedNode.match;
+    //look it up in the childlist of curr node
+    if (children[txt.codeUnitAt(idx)] case final foundNode?) {
+      //found curr letter then move the idx to point to the next letter
+      idx++;
+
+      //if the found node is no leaf look further
+      if (!foundNode.isLeaf) {
+        if (foundNode.findMatch(txt, idx) case (T deepMatch?, int deepIdx)?) {
+          return (deepMatch, deepIdx);
+        }
+      }
+      //if not found in the deeper branch
+      if (foundNode.match case T m?) {
+        return (m, idx);
+      }
     }
+
+    // no find, the idx stays the same
     return null;
   }
 
@@ -28,10 +43,11 @@ class SpellTreeNode<T> {
   }
 
   static SpellTreeNode<T> assembleTree<T>(List<(String, T)> entries) {
-    entries.sort((a, b) {
-      var res = a.$1.length - b.$1.length;
-      return res != 0 ? res : a.$1.compareTo(b.$1);
-    });
+    //no need to sort it first
+    // entries.sort((a, b) {
+    //   var res = a.$1.length - b.$1.length;
+    //   return res != 0 ? res : a.$1.compareTo(b.$1);
+    // });
     final root = SpellTreeNode<T>(null);
     for (final (term, match) in entries) {
       root.insert(term, 0, match);
@@ -58,3 +74,6 @@ class SpellTreeNode<T> {
     return buf.toString();
   }
 }
+
+final SpellTreeNode<(int, int)> ascPyRimeTree =
+    SpellTreeNode.assembleTree(untonedFinalsToMedRime);
