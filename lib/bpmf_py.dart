@@ -48,8 +48,12 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
       (init == 0 ? 40 : init - $b) * 41 * 41 * 41;
 
   @override
-  bool operator ==(Object other) =>
-      other is BpmfSyllable && other.hashCode == hashCode;
+  bool operator ==(covariant BpmfSyllable other) => other.hashCode == hashCode;
+
+  operator >(BpmfSyllable other) => compareTo(other) > 0;
+  operator >=(BpmfSyllable other) => this > other || this == other;
+  operator <(BpmfSyllable other) => !(this >= other);
+  operator <=(BpmfSyllable other) => this < other || this == other;
   //#endregion
 
   //#region props
@@ -326,3 +330,23 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
 
   //#endregion
 }
+
+//#region helper functions
+
+String pinyinToBopomofo(String py) => BpmfSyllable.fromPinyin(py).bopomofo;
+
+String bopomofoToPinyin(String bpmf) => BpmfSyllable.fromBopomofo(bpmf).pinyin;
+
+String asciiPinyinToBopomofo(String ascPy) =>
+    BpmfSyllable.fromAsciiPinyin(ascPy).bopomofo;
+
+String bopomofoToAsciiPinyin(bpmf) =>
+    BpmfSyllable.fromBopomofo(bpmf).asciiPinyin;
+
+String asciiPinyinToPinyin(String ascPy) =>
+    BpmfSyllable.fromAsciiPinyin(ascPy).pinyin;
+
+String pinyinToAsciiPinyin(String py) =>
+    BpmfSyllable.fromPinyin(py).asciiPinyin;
+
+//#endregion
