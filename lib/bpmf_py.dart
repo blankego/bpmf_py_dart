@@ -16,11 +16,13 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
 
   const BpmfSyllable(this.init, this.med, this.rime, this.tone);
 
-  factory BpmfSyllable.fromBopomofo(String bpmf) =>
-      BpmfSyllable.parseBopomofo(bpmf).$1;
+  factory BpmfSyllable.fromBopomofo(String bpmf) => parseBopomofo(bpmf).$1;
 
   factory BpmfSyllable.fromAsciiPinyin(String ascPy) =>
-      BpmfSyllable.parseAsciiPinyin(ascPy).$1;
+      parseAsciiPinyin(ascPy).$1;
+
+  factory BpmfSyllable.fromPinyin(String py) => parsePinyin(py).$1;
+
   //#endregion
 
   //#region structural props
@@ -168,6 +170,8 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
 
   //#endregion
 
+  //#region parsers
+
   static int skipSpaces(String str, int pos) {
     for (;; pos++) {
       if (str.codeUnitAt(pos) case $space || $fullspace || $tab || $apos) {
@@ -270,10 +274,43 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
     throw ArgumentError('"$pinyin" is not valid pinyin');
   }
 
+  static (BpmfSyllable, int) parsePinyin(String pinyin, {int pos = 0}) {
+    var (i, p1) = parsePinyinInitial(pinyin, pos: pos);
+    //W,Y
+    bool isW = i == $u;
+    bool isY = i == $i;
+    if (isW || isY) i = 0;
+
+    if (pyRimeTree.findMatch(pinyin, p1)
+        case ((var m, var r, var t), var p2)?) {
+      //dealing with pinyin quirks
+
+      if (isW) {
+        //wu,w_ -> u, u_
+        m = $u;
+      } else if (isY) {
+        //yan -> ian, yuan -> üan
+        m = m == $u || m == $yu ? $yu : $i;
+        //ye -> ye(h)
+        if (m == $i && r == $e) r = $eh;
+      } else if (i case $j || $q || $x when m == $u) {
+        //juan -> jüan
+        m = $yu;
+      } else if (i case >= $zh && <= $s when m == $i && r == 0) {
+        //zh+i -> zhi
+        m = 0;
+      }
+
+      return (BpmfSyllable(i, m, r, t), p2);
+    }
+    throw ArgumentError('"$pinyin" is not valid pinyin');
+  }
+
   static (int, int) parsePinyinInitial(String py, {int pos = 0}) {
     pos = skipSpaces(py, pos);
     var firstLetter = py.codeUnitAt(pos);
-    if (firstLetter < $A || firstLetter > $Z) {
+    if ((firstLetter < $A || firstLetter > $Z) &&
+        !pyVowels.contains(firstLetter)) {
       throw ArgumentError(
           'The letter ${py[pos]} at $pos of "$py" is invalid pinyin initial');
     }
@@ -286,137 +323,6 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
     }
     return (i, pos);
   }
+
+  //#endregion
 }
-
-//#region maps
-
-const pyRimeNucCodaMap = {
-  $a: ($A, ''),
-  $o: ($O, ''),
-  $e: ($E, ''),
-  $eh: ($E, ''),
-  $ai: ($A, 'i'),
-  $ei: ($E, 'i'),
-  $ao: ($A, 'o'),
-  $ou: ($O, 'u'),
-  $an: ($A, 'n'),
-  $en: ($E, 'n'),
-  $ang: ($A, 'ng'),
-  $eng: ($E, 'ng'),
-  $er: ($E, 'r'),
-  $i: ($I, ''),
-  $u: ($U, ''),
-  $yu: ($YU, ''),
-  0: ($I, ''), //(r)i
-};
-
-const pyUntonedToTonedNucMap = {
-  $A: 'āáǎàa',
-  $E: 'ēéěèe',
-  $I: 'īíǐìi',
-  $O: 'ōóǒòo',
-  $U: 'ūúǔùu',
-  $YU: 'ǖǘǚǜü',
-};
-
-final Map<int, int> pyTonedToUntonedNucMap = (() => {
-      for (final MapEntry(:key, :value) in pyUntonedToTonedNucMap.entries)
-        for (final ch in value.codeUnits) ch: key
-    })();
-
-const pyFirstLetterMap = {
-  $B: $b,
-  $P: $p,
-  $M: $m,
-  $F: $f,
-  $D: $d,
-  $T: $t,
-  $N: $n,
-  $L: $l,
-  $G: $g,
-  $K: $k,
-  $H: $h,
-  $J: $j,
-  $Q: $q,
-  $X: $x,
-  $Z: $z,
-  $C: $c,
-  $S: $s,
-  $R: $r,
-  $Y: $i,
-  $W: $u,
-};
-
-const initialPyMap = {
-  $b: 'b',
-  $p: 'p',
-  $m: 'm',
-  $f: 'f',
-  $d: 'd',
-  $t: 't',
-  $n: 'n',
-  $l: 'l',
-  $g: 'g',
-  $k: 'k',
-  $h: 'h',
-  $j: 'j',
-  $q: 'q',
-  $x: 'x',
-  $zh: 'zh',
-  $ch: 'ch',
-  $sh: 'sh',
-  $r: 'r',
-  $z: 'z',
-  $c: 'c',
-  $s: 's',
-  $i: 'y',
-  $u: 'w',
-  $yu: 'y',
-  // 0: '',
-};
-
-// const fromBpmfLetterMap = {
-//   'ㄅ': $b,
-//   'ㄆ': $p,
-//   'ㄇ': $m,
-//   'ㄈ': $f,
-//   'ㄉ': $d,
-//   'ㄊ': $t,
-//   'ㄋ': $n,
-//   'ㄌ': $l,
-//   'ㄍ': $g,
-//   'ㄎ': $k,
-//   'ㄏ': $h,
-//   'ㄐ': $j,
-//   'ㄑ': $q,
-//   'ㄒ': $x,
-//   'ㄓ': $zh,
-//   'ㄔ': $ch,
-//   'ㄕ': $sh,
-//   'ㄖ': $r,
-//   'ㄗ': $z,
-//   'ㄘ': $c,
-//   'ㄙ': $s,
-//   'ㄚ': $a,
-//   'ㄛ': $o,
-//   'ㄜ': $e,
-//   'ㄝ': $eh,
-//   'ㄞ': $ai,
-//   'ㄟ': $ei,
-//   'ㄠ': $ao,
-//   'ㄡ': $ou,
-//   'ㄢ': $an,
-//   'ㄣ': $en,
-//   'ㄤ': $ang,
-//   'ㄥ': $eng,
-//   'ㄦ': $er,
-//   'ㄧ': $i,
-//   'ㄨ': $u,
-//   'ㄩ': $yu,
-// };
-
-// final Map<String, String> toBpmfLetterMap = {
-//   for (final MapEntry(:key, :value) in fromBpmfLetterMap.entries) value: key
-// };
-
-//#endregion

@@ -59,4 +59,12 @@ void main() {
     final s2 = BpmfSyllable.fromAsciiPinyin('ruang3');
     expect(s1 == s2, true);
   });
+
+  test('BpmfSyllable:can parse standard pinyin', () {
+    for (final (bpmf, py) in mandarinSounds) {
+      final (syl, _) = BpmfSyllable.parsePinyin(py);
+      expect(syl.toString(), bpmf);
+      expect(syl.pinyin, py);
+    }
+  });
 }

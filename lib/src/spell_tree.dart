@@ -77,3 +77,6 @@ class SpellTreeNode<T> {
 
 final SpellTreeNode<(int, int)> ascPyRimeTree =
     SpellTreeNode.assembleTree(untonedFinalsToMedRime);
+
+final SpellTreeNode<(int, int, int)> pyRimeTree =
+    SpellTreeNode.assembleTree(tonedFinalsToMedRimetone);
