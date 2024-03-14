@@ -2,7 +2,7 @@ import 'src/py_maps.dart';
 import 'src/spell_tree.dart';
 import 'src/bpmf_codes.dart';
 
-class BpSyllable {
+class BpmfSyllable implements Comparable<BpmfSyllable> {
   //#region fields and ctor
   //The following three fields are all charcode of corresponding bopomofo symbols
   final int init;
@@ -14,8 +14,13 @@ class BpSyllable {
   // 0 for unknown if the pinyin in ascii form is unmarked
   final int tone;
 
-  const BpSyllable(this.init, this.med, this.rime, this.tone);
+  const BpmfSyllable(this.init, this.med, this.rime, this.tone);
 
+  factory BpmfSyllable.fromBopomofo(String bpmf) =>
+      BpmfSyllable.parseBopomofo(bpmf).$1;
+
+  factory BpmfSyllable.fromAsciiPinyin(String ascPy) =>
+      BpmfSyllable.parseAsciiPinyin(ascPy).$1;
   //#endregion
 
   //#region structural props
@@ -25,10 +30,27 @@ class BpSyllable {
 
   //#endregion
 
-  //#region props
-
+  //#region implementation of interfaces
   @override
   String toString() => bopomofo;
+
+  @override
+  int compareTo(BpmfSyllable other) => hashCode - other.hashCode;
+
+  ///It has unique hash code and the hash code is in correct order
+  @override
+  int get hashCode =>
+      tone +
+      (rime == 0 ? 0 : rime - $s) * 41 +
+      (med == 0 ? 0 : med - $er) * 41 * 41 +
+      (init == 0 ? 40 : init - $b) * 41 * 41 * 41;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BpmfSyllable && other.hashCode == hashCode;
+  //#endregion
+
+  //#region props
 
   String get pinyin {
     final buf = StringBuffer(pyInit);
@@ -155,7 +177,7 @@ class BpSyllable {
     }
   }
 
-  static (BpSyllable, int) parseBopomofo(String bopomofo, {int pos = 0}) {
+  static (BpmfSyllable, int) parseBopomofo(String bopomofo, {int pos = 0}) {
     int letter = bopomofo.codeUnitAt(pos = skipSpaces(bopomofo, pos));
     final len = bopomofo.length;
     //初始化聲介韻調
@@ -205,10 +227,10 @@ class BpSyllable {
       }
     }
 
-    return (BpSyllable(i, m, r, t), pos);
+    return (BpmfSyllable(i, m, r, t), pos);
   }
 
-  static (BpSyllable, int) parseAsciiPinyin(String pinyin, {int pos = 0}) {
+  static (BpmfSyllable, int) parseAsciiPinyin(String pinyin, {int pos = 0}) {
     var (i, p1) = parsePinyinInitial(pinyin, pos: pos);
     //W,Y
     bool isW = i == $u;
@@ -243,7 +265,7 @@ class BpSyllable {
         m = 0;
       }
 
-      return (BpSyllable(i, m, r, t), p2);
+      return (BpmfSyllable(i, m, r, t), p2);
     }
     throw ArgumentError('"$pinyin" is not valid pinyin');
   }
