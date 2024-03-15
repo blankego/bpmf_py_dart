@@ -9,3 +9,4 @@ foo.*
 *副本.xlsx
 foo/
 logs/
+pubspec.lock
