@@ -1,6 +1,6 @@
 name: bpmf_py
 description: A bopomofo and pinyin processing library. It provides parsing of both the standard mandarin phonetic notations, and conversion between them.
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/blankego/bpmf_py_dart
 
 environment:

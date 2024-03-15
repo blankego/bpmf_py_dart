@@ -67,4 +67,27 @@ void main() {
       expect(syl.pinyin, py);
     }
   });
+
+  test(
+      'BpmfSyllable:handles ill-formed spelling by returning empty syl and unchanged pos',
+      () {
+    var badSpelling = ' 万X尢';
+    var (syl, pos) = BpmfSyllable.parseBopomofo(badSpelling, pos: 0);
+    expect(syl, BpmfSyllable.empty);
+    expect(pos, 0);
+
+    badSpelling = "'ßœón";
+    pos = 1;
+    (syl, pos) = BpmfSyllable.parseAsciiPinyin(badSpelling, pos: pos);
+    expect(syl, BpmfSyllable.empty);
+    expect(pos, 1);
+
+    pos = 2;
+    (syl, pos) = BpmfSyllable.parsePinyin(badSpelling, pos: pos);
+    expect(syl, BpmfSyllable.empty);
+    expect(pos, 2);
+    expect(pinyinToBopomofo(badSpelling), '');
+    expect(asciiPinyinToBopomofo(badSpelling), '');
+    expect(bopomofoToPinyin(badSpelling), '');
+  });
 }

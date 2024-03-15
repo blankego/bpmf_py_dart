@@ -14,6 +14,8 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
   // 0 for unknown if the pinyin in ascii form is unmarked
   final int tone;
 
+  static const BpmfSyllable empty = BpmfSyllable(0, 0, 0, 0);
+
   const BpmfSyllable(this.init, this.med, this.rime, this.tone);
 
   factory BpmfSyllable.fromBopomofo(String bpmf) => parseBopomofo(bpmf).$1;
@@ -57,8 +59,12 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
   //#endregion
 
   //#region props
+  bool get isEmpty => this == empty;
+  bool get isNotEmpty => this != empty;
 
   String get pinyin {
+    if (isEmpty) return '';
+
     final buf = StringBuffer(pyInit);
     final (m, nuc, coda) = _pyRimeParts;
     if (m > 0) buf.writeCharCode(m);
@@ -69,6 +75,8 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
   }
 
   String get asciiPinyin {
+    if (isEmpty) return '';
+
     final buf = StringBuffer(pyInit)
       ..write(medRimeToAscii[(_pySihu, _pyRime)]!)
       ..write(const ['', '1', '2', '3', '4', '5'][tone]);
@@ -162,6 +170,8 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
   }
 
   String get bopomofo {
+    if (isEmpty) return '';
+
     final buf = StringBuffer();
     if (tone == 5) buf.writeCharCode(toneMarks[4]);
     if (init > 0) buf.writeCharCode(init);
@@ -185,49 +195,57 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
     }
   }
 
-  static (BpmfSyllable, int) parseBopomofo(String bopomofo, {int pos = 0}) {
-    int letter = bopomofo.codeUnitAt(pos = skipSpaces(bopomofo, pos));
-    final len = bopomofo.length;
+  /// It parses the string starting from the character pointed by the pos.
+  /// If well-formed spelling of a syllable is found it contructs a corresponding
+  /// mandarin syllable object, returns it with the next starting points in the string
+  /// If the text is ill-formed instead of throwing an error
+  /// its returns a empty syllable with the pos kept unchanged
+  static (BpmfSyllable, int) parseBopomofo(String txt, {int pos = 0}) {
+    int idx = skipSpaces(txt, pos);
+    int letter = txt.codeUnitAt(idx);
+    final len = txt.length;
+
     //初始化聲介韻調
     int i = 0, m = 0, r = 0, t = 0;
 
     //首字母是否輕聲
     if (letter == $5) {
       t = 5;
-      letter = bopomofo.codeUnitAt(++pos);
+      letter = txt.codeUnitAt(++idx);
     }
 
     //聲母
     if (letter >= $b && letter < $a) {
       i = letter;
-      if (++pos < len) letter = bopomofo.codeUnitAt(pos);
+      if (++idx < len) letter = txt.codeUnitAt(idx);
     }
 
     //介音及iuü韻腹
-    if (pos < len && letter >= $i && letter <= $yu) {
+    if (idx < len && letter >= $i && letter <= $yu) {
       m = letter;
-      if (++pos < len) letter = bopomofo.codeUnitAt(pos);
+      if (++idx < len) letter = txt.codeUnitAt(idx);
     }
 
     //韻母
-    if (pos < len && letter >= $a && letter <= $er) {
+    if (idx < len && letter >= $a && letter <= $er) {
       r = letter;
-      if (++pos < len) letter = bopomofo.codeUnitAt(pos);
+      if (++idx < len) letter = txt.codeUnitAt(idx);
     }
 
     //Test whether essential parts of the syllable exist
     if (!(m > 0 || r > 0 || i >= $zh && i <= $s)) {
-      throw ArgumentError('Invalid bopomofo spelling: $bopomofo');
+      // throw ArgumentError('Invalid bopomofo spelling: $txt');
+      return (empty, pos); //return empty, and original starting point
     }
 
     //聲調
     if (t == 0) {
       //非輕聲
 
-      if (pos < len) {
+      if (idx < len) {
         if (const [$1, $2, $3, $4].indexOf(letter) case int toneNum && >= 0) {
           t = toneNum + 1;
-          pos++;
+          idx++;
         }
       } else {
         //陰平不標
@@ -235,97 +253,84 @@ class BpmfSyllable implements Comparable<BpmfSyllable> {
       }
     }
 
-    return (BpmfSyllable(i, m, r, t), pos);
+    return (BpmfSyllable(i, m, r, t), idx);
   }
 
   static (BpmfSyllable, int) parseAsciiPinyin(String pinyin, {int pos = 0}) {
     var (i, p1) = parsePinyinInitial(pinyin, pos: pos);
-    //W,Y
-    bool isW = i == $u;
-    bool isY = i == $i;
-    if (isW || isY) i = 0;
 
     if (ascPyRimeTree.findMatch(pinyin, p1) case ((var m, var r), var p2)?) {
       var t = 0;
       if (p2 < pinyin.length) {
-        if (pinyin.codeUnitAt(p2)
-            case > 48 && < 54 && var toneCode /* '1' < x < '5'*/) {
+        if (pinyin.codeUnitAt(p2) case > 48 && < 54 && var toneCode) {
+          /* 48:'0' < x < 54:'6'*/
           t = toneCode - 48;
           p2++;
         }
       }
-
-      //dealing with pinyin quirks
-
-      if (isW) {
-        //wu,w_ -> u, u_
-        m = $u;
-      } else if (isY) {
-        //yan -> ian, yuan -> üan
-        m = m == $u || m == $yu ? $yu : $i;
-        //ye -> ye(h)
-        if (m == $i && r == $e) r = $eh;
-      } else if (i case $j || $q || $x when m == $u) {
-        //juan -> jüan
-        m = $yu;
-      } else if (i case >= $zh && <= $s when m == $i && r == 0) {
-        //zh+i -> zhi
-        m = 0;
-      }
-
+      (i, m, r) = _pinyinToSylStructure(i, m, r);
       return (BpmfSyllable(i, m, r, t), p2);
     }
-    throw ArgumentError('"$pinyin" is not valid pinyin');
+    return (empty, pos);
+  }
+
+  ///Translate pinyin into actual syllabic structure
+  static (int init, int med, int rime) _pinyinToSylStructure(
+      int init, int med, int rime) {
+    //W,Y
+    bool isW = init == $u;
+    bool isY = init == $i;
+    if (isW || isY) init = 0;
+
+    if (isW) {
+      //wu,w_ -> u, u_
+      med = $u;
+    } else if (isY) {
+      //yan -> ian, yuan -> üan
+      med = med == $u || med == $yu ? $yu : $i;
+      //ye -> ye(h)
+      if (med == $i && rime == $e) rime = $eh;
+    } else if (init case $j || $q || $x when med == $u) {
+      //juan -> jüan
+      med = $yu;
+    } else if (init case >= $zh && <= $s when med == $i && rime == 0) {
+      //zh+i -> zhi
+      med = 0;
+    }
+    return (init, med, rime);
   }
 
   static (BpmfSyllable, int) parsePinyin(String pinyin, {int pos = 0}) {
     var (i, p1) = parsePinyinInitial(pinyin, pos: pos);
-    //W,Y
-    bool isW = i == $u;
-    bool isY = i == $i;
-    if (isW || isY) i = 0;
 
     if (pyRimeTree.findMatch(pinyin, p1)
         case ((var m, var r, var t), var p2)?) {
-      //dealing with pinyin quirks
-
-      if (isW) {
-        //wu,w_ -> u, u_
-        m = $u;
-      } else if (isY) {
-        //yan -> ian, yuan -> üan
-        m = m == $u || m == $yu ? $yu : $i;
-        //ye -> ye(h)
-        if (m == $i && r == $e) r = $eh;
-      } else if (i case $j || $q || $x when m == $u) {
-        //juan -> jüan
-        m = $yu;
-      } else if (i case >= $zh && <= $s when m == $i && r == 0) {
-        //zh+i -> zhi
-        m = 0;
-      }
-
+      (i, m, r) = _pinyinToSylStructure(i, m, r);
       return (BpmfSyllable(i, m, r, t), p2);
     }
-    throw ArgumentError('"$pinyin" is not valid pinyin');
+    return (empty, pos);
   }
 
   static (int, int) parsePinyinInitial(String py, {int pos = 0}) {
-    pos = skipSpaces(py, pos);
-    var firstLetter = py.codeUnitAt(pos);
-    if ((firstLetter < $A || firstLetter > $Z) &&
-        !pyVowels.contains(firstLetter)) {
-      throw ArgumentError(
-          'The letter ${py[pos]} at $pos of "$py" is invalid pinyin initial');
+    int idx = skipSpaces(py, pos);
+
+    var firstLetter = py.codeUnitAt(idx);
+    if ((firstLetter >= $A && firstLetter <= $Z) ||
+        pyVowels.contains(firstLetter)) {
+      if (pyFirstLetterMap[firstLetter] case int init) {
+        idx++;
+
+        //zh, ch, sh
+        if (init case $z || $c || $s when py.codeUnitAt(idx) == $H) {
+          idx++;
+          init = switch (init) { $z => $zh, $c => $ch, _ => $sh };
+        }
+
+        return (init, idx);
+      }
     }
-    var i = pyFirstLetterMap[firstLetter];
-    if (i == null) return (0, pos);
-    pos++;
-    if (i case $z || $c || $s when py.codeUnitAt(pos) == $H) {
-      pos++;
-      i = switch (i) { $z => $zh, $c => $ch, _ => $sh };
-    }
-    return (i, pos);
+
+    return (0, idx);
   }
 
   //#endregion

@@ -27,6 +27,12 @@ void main() {
   (syl, pos) = BpmfSyllable.parseBopomofo(txt, pos: pos);
   print(syl); //outputs: 'ㄖㄣˊ'
 
+  //If the text is ill-formed...
+  (syl, pos) = BpmfSyllable.parseBopomofo('万X尢', pos: 0);
+  //... it returns an empty syllable and keeps the pos unchanged
+  print('The syllable is "$syl", next index is $pos');
+  //outpus: The syllable is "", next index is 0
+
   //If you don't care about the continuous parsing you can simply use the factory
   //method, ignore the position.
   syl = BpmfSyllable.fromBopomofo(txt);
@@ -57,10 +63,10 @@ void main() {
   //The order conforms to the order of bopomofo: b p ... i u ü
 
   //For you convenience the following helper functions are also provided:
-  print(pinyinToAsciiPinyin('ráo'));  //outputs: rao2
+  print(pinyinToAsciiPinyin('ráo')); //outputs: rao2
   print(asciiPinyinToPinyin('rao2')); //outputs: ráo
-  print(bopomofoToPinyin('ㄑㄩㄥ'));   //outputs: 'qiōng'
-  print(pinyinToBopomofo('qiōng'));   //outputs: 'ㄑㄩㄥ
-  print(asciiPinyinToBopomofo('qiong1'));   //outputs: 'ㄑㄩㄥ
-  print(bopomofoToAsciiPinyin('ㄑㄩㄥ'));   //outputs: 'qiong1
+  print(bopomofoToPinyin('ㄑㄩㄥ')); //outputs: 'qiōng'
+  print(pinyinToBopomofo('qiōng')); //outputs: 'ㄑㄩㄥ
+  print(asciiPinyinToBopomofo('qiong1')); //outputs: 'ㄑㄩㄥ
+  print(bopomofoToAsciiPinyin('ㄑㄩㄥ')); //outputs: 'qiong1
 }
